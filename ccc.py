@@ -237,3 +237,5 @@ if __name__=='__main__':
         main("""
 ./ccc.py build/source.avi tlmir-palette.png build/cccout.ccc1
 """.split())
+    else:
+        main()

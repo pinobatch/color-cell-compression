@@ -31,7 +31,7 @@ def try_inter(frame, prev_frame):
     return b"".join(found)
 
 def main():
-    args_input = "cccout.ccc1"
+    args_input = "build/cccout.ccc1"
     use_interframe = True
     
     with open(args_input, "rb") as infp:

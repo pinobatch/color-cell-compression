@@ -1,15 +1,15 @@
 #!/bin/sh
 set -e
-SRCVIDEO="$HOME/Videos/Weebles2016/Weebles - Two Lefts Make It Right _ Cartoons For Children by Official Weebles-Pnm4fRWIBFw.mp4"
-CLUT=tlmir-palette.png
+SRCVIDEO='source_video/Sonic CD Intro [HD] [Lft02DuvqnQ].webm'
+CLUT=sonic_cd_palette.png
 SSDPCM="$HOME/develop/ssdpcm/build"
 
 mkdir -p build
 
 # make a low-resolution lossless intermediate
-ffmpeg -y -i "$SRCVIDEO" -ss 19 -t 130 \
-  -r 12 -s 256x144 -c:v huffyuv -an build/source.avi
-ffmpeg -y -i "$SRCVIDEO" -ss 19 -t 130 \
+ffmpeg -y -i "$SRCVIDEO" \
+  -r 12 -vf "crop=1248:702" -s 256x144 -c:v huffyuv -an build/source.avi
+ffmpeg -y -i "$SRCVIDEO" \
   -vn -ar 13379 -af "volume=2" -ac 1 -c:a pcm_u8 build/source.wav
 
 # make SSDPCM audio
@@ -23,12 +23,12 @@ ffmpeg -y -i "$SRCVIDEO" -ss 19 -t 130 \
 # I left off -y because you may want to hand-tweak this palette.
 # This is what 16-color video can look like without the
 # Color Cell Compression constraint.
-##ffmpeg -i build/source.avi -vf "palettegen=16" "$CLUT"
-##ffmpeg -y -i build/source.avi -i "$CLUT" \
-##  -filter_complex "[0:v][1:v] paletteuse=bayer:2" out-non-ccc.gif
+ffmpeg -i build/source.avi -vf "palettegen=16" "$CLUT"
+ffmpeg -y -i build/source.avi -i "$CLUT" \
+  -filter_complex "[0:v][1:v] paletteuse=bayer:2" out-non-ccc.gif
 
 # Color Cell Compression experiment
-./ccc.py build/source.avi $(CLUT) build/cccout.ccc1
+./ccc.py build/source.avi "$CLUT" build/cccout.ccc1
 ./cccdec.py build/cccout.ccc1 build/cccout.mp4
 ffmpeg -y -i build/cccout.mp4 -i build/ss16.wav \
   -c:v copy -movflags +faststart preview.mp4

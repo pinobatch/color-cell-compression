@@ -3,3 +3,4 @@ build/
 /*.zip
 out-non-ccc.gif
 
+__pycache__
