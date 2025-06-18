@@ -73,7 +73,7 @@ def main(argv=None):
         out_size = (video_size[0] * 2, video_size[1] * 2)
         dstcmd = """
 ffmpeg -y -f rawvideo -pix_fmt rgb24 -r 12 -s %dx%d -an -i -
--crf 25 -movflags +faststart
+-crf 25 -pix_fmt yuv420p -movflags +faststart
 """ % out_size
         dstcmd = dstcmd.split()
         dstcmd.append(args.output)
