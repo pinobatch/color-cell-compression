@@ -18,11 +18,19 @@ import cccdec
 
 def try_intra(frame):
     all_shapes = Counter()
+    last_color = last_shape = None
+    color_only_matches = full_matches = 0
     for i in range(0, len(frame), 3):
         color = frame[i]
         shape = frame[i + 1] << 8 | frame[i + 2]
         all_shapes[shape] += 1
-    return all_shapes
+        if color == last_color:
+            if shape == last_shape:
+                full_matches += 1
+            else:
+                color_only_matches += 1
+        last_color, last_shape = color, shape
+    return all_shapes, full_matches, color_only_matches
 
 def try_inter(frame, prev_frame):
     this_blocks = [frame[i:i + 3] for i in range(0, len(frame), 3)]
@@ -30,21 +38,32 @@ def try_inter(frame, prev_frame):
     found = [t for t, p in zip_longest(this_blocks, prev_blocks) if t != p]
     return b"".join(found)
 
-def main():
-    args_input = "build/cccout.ccc1"
-    use_interframe = True
+def parse_argv(argv):
+    p = argparse.ArgumentParser(
+        description="Estimates how big the compressed CCC file would be"
+    )
+    p.add_argument("input", help="video file produced by ccc.py")
+    p.add_argument("--inter", action="store_true",
+                   help="skip blocks matching a block in the previous frame")
+    return p.parse_args(argv[1:])
+
+def main(argv=None):
+    args = parse_argv(argv or sys.argv)
+    use_interframe = args.inter
     
-    with open(args_input, "rb") as infp:
+    with open(args.input, "rb") as infp:
         header = infp.read(cccdec.HEADER_SIZE)
         video_size, palim = cccdec.ccc_unpack_header(header)
         small_size = (video_size[0] // cccdec.CCC_SIZE[0],
                       video_size[1] // cccdec.CCC_SIZE[1])
         frame_bytes = small_size[0] * small_size[1] * 3
-        print(small_size, frame_bytes)
+        print("%s: %dx%d pixels, %dx%d blocks, %d bytes/frame"
+              % (args.input, *video_size, *small_size, frame_bytes))
         frame_count = 0
         all_shapes = Counter()
         prev_frame = bytes(frame_bytes)
         total_inter_bytes = 0
+        intra_color_matches = intra_full_matches = 0
         while True:
             frame = infp.read(frame_bytes)
             if len(frame) < frame_bytes: break
@@ -53,7 +72,10 @@ def main():
             else:
                 inter_result = frame
             total_inter_bytes += len(inter_result)
-            all_shapes += try_intra(inter_result)
+            intra_result = try_intra(inter_result)
+            all_shapes += intra_result[0]
+            intra_full_matches += intra_result[1]
+            intra_color_matches += intra_result[2]
             frame_count += 1
             prev_frame = frame
     num_blocks = small_size[0] * small_size[1] * frame_count
@@ -69,6 +91,8 @@ def main():
     else:
         inter_map_size = 0
         print("intra coding only!")
+    print("of %d blocks to be coded, %d are full matches, %d color matches"
+          % (inter_blocks, intra_full_matches, intra_color_matches))
     print("before (%4d frames):  %8d bytes" % (frame_count, before_bytes))
     print("inter: %7d (%4.1f%%),%8d bytes"
           % ((num_blocks - inter_blocks),
@@ -103,4 +127,9 @@ Assumed coding scheme
 """)
 
 if __name__=='__main__':
-    main()
+    if 'idlelib' in sys.modules:
+        main("""
+./cccestimate.py --inter build/cccout.ccc1
+""".split())
+    else:
+        main()
