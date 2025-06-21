@@ -1,6 +1,6 @@
-/preview.mp4
+/preview*.mp4
 build/
 /*.zip
-out-non-ccc.gif
-
+out*.gif
 __pycache__
+/source_video

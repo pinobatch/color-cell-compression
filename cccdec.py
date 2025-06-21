@@ -52,8 +52,12 @@ def ccc_restore_frame(width, palim, blk_colorpairs, blk_shapes):
     out.putpalette(palim.getpalette())
     return out
 
-trace_frame = None
-
+def parse_trace_frame(framenum):
+    if not framenum: return None
+    eq = framenum.split("=", 1)
+    framenum = int(eq[0])
+    framename = eq[1] if len(eq) > 1 else None
+    return framenum, framename
 
 def parse_argv(argv):
     p = argparse.ArgumentParser(
@@ -61,8 +65,8 @@ def parse_argv(argv):
     )
     p.add_argument("input", help="uncompressed CCC file")
     p.add_argument("output", help="output video file")
-    p.add_argument("--trace-frame", type=int,
-                   help="frame number to draw")
+    p.add_argument("--trace-frame", type=parse_trace_frame,
+                   help="frame number to show or save, e.g. 123 or 100=out.png")
     return p.parse_args(argv[1:])
 
 def main(argv=None):
@@ -73,7 +77,7 @@ def main(argv=None):
         out_size = (video_size[0] * 2, video_size[1] * 2)
         dstcmd = """
 ffmpeg -y -f rawvideo -pix_fmt rgb24 -r 12 -s %dx%d -an -i -
--crf 25 -pix_fmt yuv420p -movflags +faststart
+-crf 28 -pix_fmt yuv420p -movflags +faststart
 """ % out_size
         dstcmd = dstcmd.split()
         dstcmd.append(args.output)
@@ -92,7 +96,11 @@ ffmpeg -y -f rawvideo -pix_fmt rgb24 -r 12 -s %dx%d -an -i -
             out = ccc_restore_frame(video_size[0], palim,
                                     blk_colorpairs, blk_shapes)
             out = out.resize(out_size, Image.Resampling.NEAREST).convert("RGB")
-            if frame_count == args.trace_frame: out.show()
+            if args.trace_frame and frame_count == args.trace_frame[0]:
+                if args.trace_frame[1]:
+                    out.save(args.trace_frame[1])
+                else:
+                    out.show()
             dst.stdin.write(out.tobytes())
             frame_count += 1
     result = dst.communicate()

@@ -6,7 +6,7 @@ This project will explore video encoding, using an animated cartoon
 
 For comparison, Majesco's Game Boy Advance Video cartridges store up
 to 48 minutes of video on a 32 MiB cartridge.  That averages about
-11 kB/s, which will be tough to match.
+11 kB/s for video and audio combined, which will be tough to match.
 
 Video
 -----
@@ -46,8 +46,9 @@ further, fitting a cartoon episode into 4 MiB.
 
 ### How Color Cell Compression works
 
-For each frame in a shot, find a pair of representative colors for
-each 4x4-pixel block of the frame.
+CCC behaves as a simplified version of [Apple Video] (RPZA) and
+[S3 Texture Compression] (S3TC).  For each frame in a shot, find a
+pair of representative colors for each 4x4-pixel block of the frame.
 
 1. Add dither pattern to frame, such as Bayer or Z1.
 2. Divide the dithered frame into blocks.
@@ -81,24 +82,51 @@ losslessly:
 
 1. Not encoding solid shapes and encoding the most common shapes
    using 1 byte instead of 2 reduces a 1560-frame test video from
-   10782720 bytes to 7169945, saving 33.5%.
+   10782720 bytes to 7169945, saving 33.5%.  An encoder can encode
+   this through the order of nibbles in a color pair.
 2. Adding inter-frame coding reduces encoded blocks by 64.0% at the
    cost of 449280 bytes to store which blocks are stored and which
    are repeated from the previous frame.  This reduces the video to
    3262341 bytes, saving 70%.
 
-Once the compression is figured out, it may prove worthwhile to try
-making a separate 16-color palette per shot.
+### Things to try
+
+1. Don't store consecutive duplicate blocks or color pairs within
+   an encoded frame.
+2. Noise reduction: If a block vacillates between two states that
+   differ in one pixel, encode it as the simpler one.
+3. Try calculating a preliminary codebook and rounding every block
+   to its closest match.
+4. Make a separate 16-color palette per shot, and don't use FFmpeg's
+   automatic palette generator that generates boring palettes
+
+### Playback budget
+
+I chose the CCC approach to accommodate the comparatively weak CPU of
+Mega Drive (also called Sega Genesis) and Game Boy Advance systems.
+
+- MD runs the MC68000 CPU at 15 cycles per 7 chroma periods, or about
+  7.67 MHz, or 228×262×15/7 = 128005 cycles per 59.92 Hz vblank, or
+  277 cycles per 4×4-pixel block.  Memory reads have three wait
+  states, giving a usable clock rate of 1.92 MHz.   Multiplication
+  is slow.  Subtract some for PSRAM refresh and to copy the completed
+  frame (18432 bytes) into VRAM.
+- GBA runs the ARM7TDMI at 4 cycles per dot, or about 16.8 MHz, or
+  308×228×4 = 280896 cycles per 59.73 Hz vblank, or 609 cycles per
+  4×4-pixel block.  GBA has far fewer wait states: 1 to 2 for most
+  parts of RAM, or 0 for the tightly-coupled IWRAM.  However, there's
+  no second CPU for playing sound.
 
 Audio
 -----
 
 I started with rates close to 13 kHz for two reasons:
 
-1. Game Boy Advance can use 13379 Hz.  This is 224 samples per frame,
+1. GBA can use 13379 Hz.  This is 224 samples per frame,
    or one sample per 1254 CPU cycles (at 2^24 Hz).
-2. Mega Drive can use 13317 Hz.  This is one sample per four cycles
-   of the FM chip (at 1171875/22 = 53267 Hz).
+2. MD can use 13317 Hz.  This is one sample per four cycles
+   of the FM chip (at 1171875/22 = 53267 Hz), or one sample per
+   268.8 Z80 cycles.
 
 Kagamiin wrote a codec called [SSDPCM] that represents each sample
 as a difference from the previous sample quantized to 2, 3, 4, or 6
@@ -118,4 +146,6 @@ video's audio track.
 2. Experiment with predictors more sophisticated than `y[n]=y[n-1]`
 
 [Color Cell Compression]: https://en.wikipedia.org/wiki/Color_Cell_Compression
+[Apple Video]: https://en.wikipedia.org/wiki/Apple_Video
+[S3 Texture Compression]: https://en.wikipedia.org/wiki/S3_Texture_Compression
 [SSDPCM]: https://github.com/Kagamiin/ssdpcm

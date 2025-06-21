@@ -91,8 +91,16 @@ def main(argv=None):
     else:
         inter_map_size = 0
         print("intra coding only!")
+    print("block bitmap")
+    print("of %d blocks:\n"
+          "  %d inter elided, %d full match, %d color match, %d none"
+          % (num_blocks, (num_blocks - inter_blocks),
+             intra_full_matches, intra_color_matches,
+             inter_blocks - intra_full_matches - intra_color_matches))
     print("of %d blocks to be coded, %d are full matches, %d color matches"
           % (inter_blocks, intra_full_matches, intra_color_matches))
+
+
     print("before (%4d frames):  %8d bytes" % (frame_count, before_bytes))
     print("inter: %7d (%4.1f%%),%8d bytes"
           % ((num_blocks - inter_blocks),
