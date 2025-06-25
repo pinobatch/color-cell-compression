@@ -139,11 +139,15 @@ by 13 bytes with 5 samples each.  This gives a data rate of
 13379×14/65 = 2882 bytes per second, or 374612 bytes for a 2:10
 video's audio track.
 
+Perceptual noise substitution is a party trick that can be stapled
+onto various audio codecs.  Instead of storing the actual content of
+high frequencies, it stores only the amount of energy in the top half
+of the frequency band and restores those frequencies as high-pass
+filtered noise during playback, adding about 60 bytes per second.
+
 ### To try
 
-1. Experiment with decomposition of upper frequencies into a
-   perceptual noise substitution channel
-2. Experiment with predictors more sophisticated than `y[n]=y[n-1]`
+1. Experiment with predictors more sophisticated than `y[n]=y[n-1]`
 
 [Color Cell Compression]: https://en.wikipedia.org/wiki/Color_Cell_Compression
 [Apple Video]: https://en.wikipedia.org/wiki/Apple_Video

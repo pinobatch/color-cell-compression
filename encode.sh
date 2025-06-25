@@ -11,6 +11,8 @@ ffmpeg -y -i "$SRCVIDEO" \
   -r 12 -vf "crop=1248:702" -s 256x144 -c:v huffyuv -an build/source.avi
 ffmpeg -y -i "$SRCVIDEO" \
   -vn -ar 13379 -af "volume=2" -ac 1 -c:a pcm_u8 build/source.wav
+ffmpeg -y -i "$SRCVIDEO" \
+  -vn -ar 26758 -af "volume=2" -ac 1 -c:a pcm_s16le build/source2x.wav
 
 # make SSDPCM audio
 "$SSDPCM/encoder" ss1.6 build/source.wav build/ss16.aud
