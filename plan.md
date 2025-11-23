@@ -42,7 +42,8 @@ at Mega CD ASIC addresses `$FF804C` through `$FF8056`.
 `cccdec.py` decodes an uncompressed CCC stream into a video.
 
 `cccestimate.py` estimates how the CCC stream could be compressed
-further, fitting a cartoon episode into 4 MiB.
+further, fitting a cartoon episode into 4 MiB.  It also plots a
+graph of how often each shape is used.
 
 ### How Color Cell Compression works
 
@@ -89,15 +90,27 @@ losslessly:
    are repeated from the previous frame.  This reduces the video to
    3262341 bytes, saving 70%.
 
+It was discovered that in animation, the most common 4x4-pixel shapes
+by far are the 15 that result from Bayer dithering of solid color
+areas.  These accounted for about 2/3 of the cel-animated sample and
+about 1/3 of the CGI sample.  The bias was much less pronounced in
+live action.
+
+Apart from the probability of flat or nearly-flat areas, the usage of
+each pattern was found not to vary much with time within a video.
+This means codebook replacement probably won't be needed.
+
 ### Things to try
 
 1. Don't store consecutive duplicate blocks or color pairs within
    an encoded frame.
 2. Noise reduction: If a block vacillates between two states that
    differ in one pixel, encode it as the simpler one.
-3. Try calculating a preliminary codebook and rounding every block
+3. Find some encoding that captures how much more likely the Bayer
+   dithers are than other shapes.
+4. Try calculating a preliminary codebook and rounding every block
    to its closest match.
-4. Make a separate 16-color palette per shot, and don't use FFmpeg's
+5. Make a separate 16-color palette per shot, and don't use FFmpeg's
    automatic palette generator that generates boring palettes
 
 ### Playback budget

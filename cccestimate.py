@@ -14,16 +14,32 @@ import os, sys, argparse
 from collections import Counter
 from itertools import zip_longest
 from time import sleep
+from math import sqrt
 import cccdec
 
-def try_intra(frame):
+def try_intra(frame, omit_full_matches=False):
+    """Count how often each 4x4-pixel shape is used in a frame.
+
+frame --  byteslike alternating color, shape top, shape bottom
+omit_full_matches -- if true, all_shapes shall not include
+    items included in full_matches
+
+Return a 3-tuple (all_shapes, full_matches, color_only_matches) where
+- all_shapes is a collections.Counter instance {shape: count, ...}
+- full_matches is a count of blocks whose color and shape are
+  identical to the previous block
+- color_only_matches is a count of blocks whose color pair is
+  identical to the previous block with a different shape
+"""
     all_shapes = Counter()
     last_color = last_shape = None
     color_only_matches = full_matches = 0
     for i in range(0, len(frame), 3):
         color = frame[i]
         shape = frame[i + 1] << 8 | frame[i + 2]
-        all_shapes[shape] += 1
+        if not (omit_full_matches and color == last_color
+                and shape == last_shape):
+            all_shapes[shape] += 1
         if color == last_color:
             if shape == last_shape:
                 full_matches += 1
@@ -37,6 +53,68 @@ def try_inter(frame, prev_frame):
     prev_blocks = [prev_frame[i:i + 3] for i in range(0, len(prev_frame), 3)]
     found = [t for t, p in zip_longest(this_blocks, prev_blocks) if t != p]
     return b"".join(found)
+
+def plot_common_usage(frame_shapes, common,
+                      print_common=True, centroid_sort=False):
+    """
+
+frame_shapes - an array of how often each shape is used in each frame
+    of the form [Counter({shape: count, ...}), ...]
+common - an array of [(shape, *otherfields ), ...] for the most
+    common shapes
+centroid_sort - if true, sort shapes by the centroid of when they
+    appear in frame_shapes, earlier on top and later on bottom
+
+Return a Pillow image
+"""
+    from PIL import Image
+
+    if centroid_sort:
+        centroid_nums = Counter()
+        centroid_dens = Counter()
+        for i, frame in enumerate(frame_shapes):
+            dens = Counter({row[0]: frame.get(row[0], 0) for row in common})
+            centroid_dens += dens
+            centroid_nums += Counter({
+                shape: i * count for shape, count in dens.items()
+            })
+        centroids = {
+            shape: num / centroid_dens[shape]
+            for shape, num in centroid_nums.items()
+        }
+        common.sort(key=lambda x: centroids[x[0]])
+
+    if print_common:
+        print("\n".join(
+            "{0:02x} {1:016b} {2:6d}".format(y, row[0], row[1])
+            for y, row in enumerate(common)
+        ))
+        if not centroid_sort:
+            print("top 15: %d; non-top 15: %d"
+                  % (sum(row[1] for row in common[:15]),
+                     sum(row[1] for row in common[15:])))
+
+    # draw patterns to left side of row
+    # don't draw last row if common length not multiple of 4
+    num_pats_to_draw = len(common) & -4
+    counts = [bytearray() for row in common]
+    for y, row in enumerate(common[:num_pats_to_draw]):
+        shape = row[0]
+        top = y & -4
+        for counts_row in counts[top:top + 4]:
+            for i in range(4):
+                counts_row.append(255 if shape & 0x8000 else 0)
+                shape = (shape << 1) & 0xFFFF
+            counts_row.append(64)
+
+    # draw scaled count of items in row
+    for frame in frame_shapes:
+        for shape, counts_row in zip(common, counts):
+            freq = frame.get(shape[0], 0)
+            counts_row.append(min(int(round(sqrt(freq) * 16)), 255))
+    im = Image.new("L", (len(counts[0]), len(counts)))
+    im.putdata(b"".join(counts))
+    return im
 
 def parse_argv(argv):
     p = argparse.ArgumentParser(
@@ -61,6 +139,7 @@ def main(argv=None):
               % (args.input, *video_size, *small_size, frame_bytes))
         frame_count = 0
         all_shapes = Counter()
+        frame_shapes = []
         prev_frame = bytes(frame_bytes)
         total_inter_bytes = 0
         intra_color_matches = intra_full_matches = 0
@@ -73,6 +152,7 @@ def main(argv=None):
                 inter_result = frame
             total_inter_bytes += len(inter_result)
             intra_result = try_intra(inter_result)
+            frame_shapes.append(intra_result[0])
             all_shapes += intra_result[0]
             intra_full_matches += intra_result[1]
             intra_color_matches += intra_result[2]
@@ -83,6 +163,7 @@ def main(argv=None):
     inter_blocks = total_inter_bytes // 3
     common = [row for row in all_shapes.most_common(257) if row[0]]
     del common[256:]
+    # common is [(shape, count), ...]
     total_common = sum(row[1] for row in common)
     total_full = inter_blocks - all_shapes[0] - total_common
     if use_interframe:
@@ -91,6 +172,8 @@ def main(argv=None):
     else:
         inter_map_size = 0
         print("intra coding only!")
+    common_im = plot_common_usage(frame_shapes, common)
+    common_im.save("common_shapes_usage.png")
     print("block bitmap")
     print("of %d blocks:\n"
           "  %d inter elided, %d full match, %d color match, %d none"
@@ -119,15 +202,20 @@ def main(argv=None):
     print("""
 Assumed coding scheme
 
-- Before each frame is a bitfield with one bit per 4x4-pixel block.
-- For each set bit, a block is stored, starting with a 1-byte pair
-  of color values.
+- If interframe is enabled, each frame is preceded by a bitfield with
+  one bit per 4x4-pixel block.  Blocks with the bit clear are treated
+  as identical to the previous frame.
+- Maybe expand the bitfield to indicate matching the previous block
+  either in color or in color and shape
+- Each coded block starts with a 1-byte pair of color values.
 - If the nibbles of the color value are the same, the shape is solid
   and not stored.
-- If the low nibble is less than the high nibble, an index into the
-  256 most common shapes is stored.
-- If the high nibble is less than the low nibble, the whole 16-bit
-  shape is stored.
+- If the high nibble is greater than the low nibble (such as $73),
+  an 8-bit index into the 256 most common shapes is stored.
+- If the high nibble is less than the low nibble (such as $37),
+  the whole 16-bit shape is stored.
+- The file also contains a 512-byte dictionary of the 256 most common
+  non-solid shapes.
 """)
 
 if __name__=='__main__':
