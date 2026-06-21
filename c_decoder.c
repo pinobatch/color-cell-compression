@@ -32,7 +32,7 @@ typedef unsigned short CCC_size_t;
  * would be copied to MD VRAM at a stride of 4 bytes
  * @return src destination blocks
  */ 
-const uint8_t *CCC_decode_blocks(uint32_t *dst,
+const uint8_t *CCC_decode_blocks(uint32_t *restrict dst,
                                  const uint8_t *restrict src,
                                  CCC_size_t count) {
   for(; count > 0; --count) {
